@@ -31,16 +31,12 @@ app.use(bodyParser.urlencoded({
 }));
 app.use(bodyParser.json());
 
-app.use(function (err, req, res, next) {
-  if (err instanceof SyntaxError || err instanceof Error) {
-    res.status(400).json({message: "Invalid Body", err});
-  } else {
-    next();
-  }
-});
-
 // Use routes as a module (see index.js)
 require('./routes')(app, router);
+
+// Handles body-parser error
+const validateBody = require('./helper').validateBody;
+app.use(validateBody);
 
 // Start the server
 app.listen(port);

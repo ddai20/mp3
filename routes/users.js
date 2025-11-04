@@ -1,103 +1,105 @@
 module.exports = function (router) {
-    const user = require("../models/user");
-    const task = require("../models/task");
+    const user = require('../models/user');
+    const task = require('../models/task');
+    const query = require('../helper').query;
+    const select = require('../helper').select;
+
+    'use strict';
 
     const homeRoute = router.route('/users');
 
-    homeRoute.get((req, res) => {
-        try {
-            var where_query = req.query.where != null ? JSON.parse(req.query.where) : null;
-            var select_query = req.query.select != null ? JSON.parse(req.query.select) : null;
-            var sort_query = req.query.sort != null ? JSON.parse(req.query.sort) : null;
-            var skip_query = parseInt(req.query.skip);
-            var limit_query = parseInt(req.query.limit);
-            var count_query = req.query.count != null ? req.query.count == "true" : false;
+    homeRoute.get((req, res) => query(user, req, res));
 
-            if (count_query) {
-                user.countDocuments(where_query).exec().then(data => {
-                    if (data.length == 0) {
-                        res.status(204).json({message: 'No Content',});
-                    } else {
-                        res.status(200).json({message: 'OK', data});
-                    }
-                }).catch(err => {
-                    res.status(400).json({message: 'Bad Request', err});
-                })
-            } else {
-                user.find(where_query).select(select_query).sort(sort_query).skip(skip_query).limit(limit_query).exec().then(data => {
-                    if (data.length == 0) {
-                        res.status(204).json({message: 'No Content',});
-                    } else {
-                        res.status(200).json({message: 'OK', data});
-                    }
-                }).catch(err => {
-                    res.status(400).json({message: 'Bad Request', err});
-                })
+    async function validatePendingTasks(curr_user, res) {
+        //Checks whether all task ids exist
+        try {
+            let found_ids = await task.find({_id : {$in : curr_user.pendingTasks}});
+            if (found_ids.length != curr_user.pendingTasks.length) {
+                invalid_ids = curr_user.pendingTasks.filter(item => !found_ids.includes(item));
+                res.status(400).send({message: 'Some tasks IDs do not exist', data : invalid_ids});
+                return false;
             }
-        }
 
-        catch(err) {
-            res.status(400).send({message: 'Bad Request', err: "Invalid Query Parameters"});
-        }
-    });
+            // Checks whether all tasks are not assigned to another user
 
-    homeRoute.post((req, res) => {
-        try {
-            const new_user = new user(req.body);
+            let already_assigned = await task.find({_id : {$in : curr_user.pendingTasks}, 
+                                                    assignedUser : {$nin : ['', curr_user._id]}});
 
-            new_user.save().then(data => {
-                res.status(201).json({message: 'Created', data});
-            }).catch(err => {
-                res.status(400).send({message: 'Bad Request', err});
-            });
+            if (already_assigned.length > 0) {
+                console.log(already_assigned[0].assignedUser ===  '');
+                res.status(400).send({message: 'Some tasks have already been assigned to another user', data : already_assigned});
+                return false;
+            }
+
+            return true;
         } catch(err) {
-            res.status(400).send({message: 'Bad Request', err: "Invalid Body"});
+            console.log(err);
+            res.status(400).send({message: 'Invalid task IDs', data : curr_user.pendingTasks});
         }
+    }
+
+    // Updates assignedUser and assignedUserName attributes for each pending task to the user's id and name
+    async function updatePendingTasks(curr_user) {
+        await task.updateMany({_id : {$in : curr_user.pendingTasks}}, {assignedUser : curr_user._id, assignedUserName : curr_user.name}).exec();
+    }
+
+    homeRoute.post(async (req, res) => {
+        const new_user = new user(req.body);
+
+        if (!(await validatePendingTasks(new_user, res))) {
+            return;
+        }
+
+        new_user.save().then(async data => {
+            await updatePendingTasks(data);
+
+            res.status(201).json({message: 'Created', data});
+        }).catch(() => {
+            res.status(400).send({message: 'Bad Request', data: 'Invalid body'});
+        });
     })
 
-    const idRoute = router.route('/users/:id'); 
+    const idRoute = router.route('/users/:id');
 
-    idRoute.get((req, res) => {
-        user.findById(req.params.id).then(data => {
-            res.status(200).json({message: 'OK', data});
-        }).catch(err => {
-            res.status(404).send({message: 'Not Found', err});
-        })
-    });
+    idRoute.get((req, res) => select(user, req, res));
 
     idRoute.delete((req, res) => {
-        user.findByIdAndDelete(req.params.id).exec().then(async doc => {
-            await task.updateMany({_id : {$in : doc.pendingTasks}}, {assignedUser : '', assignedUserName : 'unassigned'});
+        user.findByIdAndDelete(req.params.id).exec().then(async data => {
+            // Unassigns user from ALL TASKS that were assigned to it (even completed)
+            await task.updateMany({assignedUser : data._id}, {assignedUser : '', assignedUserName : 'unassigned'});
             
-            doc.remove().then(data => {
-                res.status(200).json({message: 'OK', data});
-            });
-        }).catch(err => {
-            res.status(404).send({message: 'Not Found', err});
+            res.status(200).json({message: 'OK', data});
+        }).catch(() => {
+            res.status(404).send({message: 'Not Found', data : 'Invalid ID'});
         })
     })
 
     idRoute.put((req, res) => {
         user.findById(req.params.id).then(async doc => {
             try {
-                old_tasks = doc.pendingTasks;
-                await doc.overwrite(req.body);
 
-                await task.updateMany({_id : {$in : old_tasks}}, {assignedUser : '', assignedUserName : 'unassigned'});
-                await task.updateMany({_id : {$in : doc.pendingTasks}}, {assignedUser : doc._id, assignedUserName : doc.name});
+                let old_tasks = doc.pendingTasks;
+                doc.overwrite(req.body);
 
+                if (!(await validatePendingTasks(doc, res))) {
+                    return;
+                }
 
-                doc.save().then(data => {
+                doc.save().then(async data => {
+                    //unassigns user from previous pending tasks
+                    await task.updateMany({_id : {$in : old_tasks}}, {assignedUser : '', assignedUserName : 'unassigned'});
+
+                    await updatePendingTasks(data);
+                    
                     res.status(200).json({message: 'OK', data});
-                }).catch(err => {
-                    res.status(400).send({message: 'Bad Request', err});
+                }).catch(() => {
+                    res.status(500).send({message: 'Server Error', data: 'Could not save document'});
                 })
-
-            } catch(err) {
-                res.status(400).send({message: 'Bad Request', err: "Invalid Supplied Task"});
+            } catch {
+                res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied User'});
             }
-        }).catch(err => {
-            res.status(404).send({message: 'Not Found', err});
+        }).catch(() => {
+            res.status(404).send({message: 'Not Found', data: 'Invalid ID'});
         })
     })
 
