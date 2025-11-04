@@ -24,6 +24,9 @@ def getUsers(conn):
     conn.request("GET","""/api/users?filter={"_id":1}""")
     response = conn.getresponse()
     data = response.read()
+
+    if (not(data)):
+        return []
     d = json.loads(data)
 
     # Array of user IDs
@@ -36,7 +39,12 @@ def getTasks(conn):
     conn.request("GET","""/api/tasks?filter={"_id":1}""")
     response = conn.getresponse()
     data = response.read()
+
+    if (not(data)):
+        return []
+    
     d = json.loads(data)
+
 
     # Array of user IDs
     tasks = [str(d['data'][x]['_id']) for x in range(len(d['data']))]
