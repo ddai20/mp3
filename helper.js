@@ -1,3 +1,4 @@
+'use strict';
 
 // GET request for both user and tasks endpoints
 function query(data, req, res) {
@@ -5,10 +6,15 @@ function query(data, req, res) {
         // Format query parameters
         let where_query = req.query.where != null ? JSON.parse(req.query.where) : null;
         let select_query = req.query.select != null ? JSON.parse(req.query.select) : null;
+        if (select_query == null) {
+            select_query = req.query.filter != null ? JSON.parse(req.query.filter) : null;
+        }
         let sort_query = req.query.sort != null ? JSON.parse(req.query.sort) : null;
         let skip_query = parseInt(req.query.skip);
         let limit_query = parseInt(req.query.limit);
         let count_query = req.query.count != null ? req.query.count == 'true' : false;
+
+        console.log(where_query);
 
         // Handle counting
         if (count_query) {
@@ -28,7 +34,7 @@ function query(data, req, res) {
         // Normal querying
         data.find(where_query).select(select_query).sort(sort_query).skip(skip_query).limit(limit_query).exec().then(data => {
             if (data.length == 0) {
-                res.status(204).json({message: 'No Content', data});
+                res.status(204).json({message: 'No Content', data : []});
             } else {
                 res.status(200).json({message: 'OK', data});
             }
@@ -50,7 +56,7 @@ function select(data, req, res) {
 
         // executes query
         data.findOne({_id: req.params.id}).select(select_query).exec().then(data => {
-            if (data) {
+            if (data != null) {
                 res.status(200).json({message: 'OK', data});
             } else {
                 res.status(404).json({message: 'Not Found', data: 'Invalid ID'});
@@ -68,30 +74,30 @@ function select(data, req, res) {
 
 // Check if the verb is supported at the endpoint
 function validateVerb(req, res, next) {
-    if (req.params.id) {
+    if (req.params.id != null) {
         if (['GET', 'PUT', 'DELETE'].includes(req.method)) {
             next();
         } else {
-            return res.status(405).json({message: 'Method Not Allowed', data : 'Only GET, PUT, and DELETE requests are allowed for this endpoint'});
+            res.status(405).json({message: 'Method Not Allowed', data : 'Only GET, PUT, and DELETE requests are allowed for this endpoint'});
         }
     } else {
         if (['GET', 'POST'].includes(req.method)) {
             next();
         } else {
-            return res.status(405).json({message: 'Method Not Allowed', data : 'Only GET, and POST requests are allowed for this endpoint'});
+            res.status(405).json({message: 'Method Not Allowed', data : 'Only GET, and POST requests are allowed for this endpoint'});
         }
     }
 }
 
 // Handles any errors in the body of a request
 function validateBody (err, req, res, next) {
+    console.log("validateBody");
     if (err instanceof SyntaxError) {
         res.status(400).json({message: 'Bad Request', data: 'Invalid Body Syntax'});
     } else {
         next();
     }
 }
-
 module.exports = {
     'query' : query,
     'select' : select,

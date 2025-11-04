@@ -1,21 +1,24 @@
+'use strict';
+
 module.exports = function (router) {
     const task = require("../models/task");
     const user = require("../models/user");
     const query = require('../helper').query;
     const select = require('../helper').select;
 
-    const homeRoute = router.route('/tasks');
+    const homeRoute = router.route('/');
 
     homeRoute.get((req, res) => query(task, req, res));
 
     async function validateAssignedUser(curr_task, res) {
         // Checks whether the user id exists if it has been assigned
         try {
-            if (curr_task.assignedUser & curr_task.assignedUser != '') {
+            if (curr_task.assignedUser != null && curr_task.assignedUser != '') {
                 let data = await user.findById(curr_task.assignedUser);
-                if (data) {
+                if (data != null) {
                     if (data.name != curr_task.assignedUserName) {
                         res.status(400).json({message: 'assignedUser and assignedUserName do not correspond to any users in the database', data});
+                        return false;
                     }
                     return true;
                 }
@@ -23,11 +26,12 @@ module.exports = function (router) {
                 return false;
             }
 
-            if (curr_task.assignedUserName != 'unassigned') {
+            if (curr_task.assignedUserName != null && curr_task.assignedUserName != 'unassigned') {
                 res.status(400).json({message: 'assignedUserName should be \'unassigned\' due missing unprovided assignedUser value', data : curr_task.assignedUserName});
+                return false;
             }
             return true;
-        } catch {
+        } catch(err) {
             res.status(400).send({message: 'Invalid user ID', data : curr_task.pendingTasks});
             return false;
         }
@@ -56,20 +60,25 @@ module.exports = function (router) {
         }
 
         new_task.save().then(async data => {
+            console.log("task posting success");
+
             await updateAssignedUser(data);
             res.status(201).json({message: 'Created', data});
         }).catch(() => {
+            console.log("task posting failed");
             res.status(400).send({message: 'Bad Request', data: 'Invalid Body'});
         });
     })
 
-    const idRoute = router.route('/tasks/:id');
+    const idRoute = router.route('/:id');
 
     idRoute.get((req, res) => select(task, req, res));
 
     idRoute.delete((req, res) => {
         task.findById(req.params.id).then(doc => {
             doc.remove().then(async data => {
+                console.log("task deleting success");
+
                 await resetAssignedUser(data);
                 res.status(200).json({message: 'OK', data});
             });
@@ -88,8 +97,11 @@ module.exports = function (router) {
                 }
 
                 doc.save().then(async data => {
+                    console.log("task putting success");
+
                     await resetAssignedUser(old_doc);
                     await updateAssignedUser(data);
+                    
                     res.status(200).json({message: 'OK', data});
                 }).catch(() => {
                     res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied Task'});

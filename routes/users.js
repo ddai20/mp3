@@ -1,12 +1,12 @@
+'use strict';
+
 module.exports = function (router) {
     const user = require('../models/user');
     const task = require('../models/task');
     const query = require('../helper').query;
     const select = require('../helper').select;
 
-    'use strict';
-
-    const homeRoute = router.route('/users');
+    const homeRoute = router.route('/');
 
     homeRoute.get((req, res) => query(user, req, res));
 
@@ -26,14 +26,12 @@ module.exports = function (router) {
                                                     assignedUser : {$nin : ['', curr_user._id]}});
 
             if (already_assigned.length > 0) {
-                console.log(already_assigned[0].assignedUser ===  '');
                 res.status(400).send({message: 'Some tasks have already been assigned to another user', data : already_assigned});
                 return false;
             }
 
             return true;
-        } catch(err) {
-            console.log(err);
+        } catch {
             res.status(400).send({message: 'Invalid task IDs', data : curr_user.pendingTasks});
         }
     }
@@ -51,15 +49,17 @@ module.exports = function (router) {
         }
 
         new_user.save().then(async data => {
+            console.log("user posting success");
             await updatePendingTasks(data);
 
             res.status(201).json({message: 'Created', data});
         }).catch(() => {
+            console.log("user posting failed");
             res.status(400).send({message: 'Bad Request', data: 'Invalid body'});
         });
     })
 
-    const idRoute = router.route('/users/:id');
+    const idRoute = router.route('/:id');
 
     idRoute.get((req, res) => select(user, req, res));
 
