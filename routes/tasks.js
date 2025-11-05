@@ -22,7 +22,7 @@ module.exports = function (router) {
                     }
                     return true;
                 }
-                res.status(400).json({message: 'Invalid assignedUser', data : curr_task.pendingTasks});
+                res.status(400).json({message: 'Invalid assignedUser', data : curr_task.assignedUser});
                 return false;
             }
 
@@ -70,7 +70,7 @@ module.exports = function (router) {
             if (err.name == "MongooseError") {
                 res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
             } else {
-                res.status(400).send({message: 'Bad Request', data: 'Invalid Body'});
+                res.status(400).send({message: 'Bad Request', data: 'Invalid task data'});
             }
         });
     })
@@ -112,7 +112,7 @@ module.exports = function (router) {
                     if (err.name == "MongooseError") {
                         res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
                     } else {
-                        res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied Task'});
+                        res.status(400).send({message: 'Bad Request', data: 'Invalid task data'});
                     }
                 })
         }).catch(err => {

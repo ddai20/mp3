@@ -69,7 +69,7 @@ module.exports = function (router) {
             if (err.name == "MongooseError") {
                 res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
             } else {
-                res.status(400).send({message: 'Bad Request', data: 'Invalid body'});
+                res.status(400).send({message: 'Bad Request', data: 'Invalid user data'});
             }
         });
     })
@@ -116,14 +116,14 @@ module.exports = function (router) {
                     if (err.name == "MongooseError") {
                         res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
                     } else {
-                        res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied User'});
+                        res.status(400).send({message: 'Bad Request', data: 'Invalid user data'});
                     }
                 })
             } catch(err) {
                 if (err.name == "MongooseError") {
                     res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
                 } else {
-                    res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied User'});
+                    res.status(400).send({message: 'Bad Request', data: 'Invalid user data'});
                 }
             }
         }).catch(err => {

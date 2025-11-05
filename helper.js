@@ -80,6 +80,11 @@ function select(data, req, res) {
 
 // Check if the verb is supported at the endpoint
 function validateVerb(req, res, next) {
+    if (req.params.p != "users" && req.params.p != "tasks") {
+        res.status(404).json({message : "Invalid Endpoint", data: req.url});
+        return;
+    }
+
     if (req.params.id != null) {
         if (['GET', 'PUT', 'DELETE'].includes(req.method)) {
             next();
