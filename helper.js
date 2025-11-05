@@ -14,8 +14,6 @@ function query(data, req, res) {
         let limit_query = parseInt(req.query.limit);
         let count_query = req.query.count != null ? req.query.count == 'true' : false;
 
-        console.log(where_query);
-
         // Handle counting
         if (count_query) {
             data.countDocuments(where_query).exec().then(data => {
@@ -38,13 +36,17 @@ function query(data, req, res) {
             } else {
                 res.status(200).json({message: 'OK', data});
             }
-        }).catch(() => {
-            res.status(400).json({message: 'Bad Request', data: 'Invalid Query Parameters'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(400).json({message: 'Bad Request', data: 'Invalid Query Parameters'});
+            }
         })
     }
 
     catch {
-        res.status(400).json({message: 'Bad Request', data: 'Invalid Query Parameters'});
+        res.status(400).json({message: 'Bad Request', data: 'Invalid Query Syntax'});
     }
 }
 
@@ -61,14 +63,18 @@ function select(data, req, res) {
             } else {
                 res.status(404).json({message: 'Not Found', data: 'Invalid ID'});
             }
-        }).catch(() => {
-            res.status(400).json({message: 'Bad Request', data: 'Invalid Query Parameters'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(400).json({message: 'Bad Request', data: 'Invalid Query Parameters'});
+            }
         })
     }
     
     // Catches formatting error
     catch {
-        res.status(400).json({message: 'Bad Request', data: 'Invalid Query Parameters'});
+        res.status(400).json({message: 'Bad Request', data: 'Invalid Query Syntax'});
     }
 }
 
@@ -91,7 +97,6 @@ function validateVerb(req, res, next) {
 
 // Handles any errors in the body of a request
 function validateBody (err, req, res, next) {
-    console.log("validateBody");
     if (err instanceof SyntaxError) {
         res.status(400).json({message: 'Bad Request', data: 'Invalid Body Syntax'});
     } else {

@@ -11,8 +11,8 @@ module.exports = function (router) {
     homeRoute.get((req, res) => query(user, req, res));
 
     async function validatePendingTasks(curr_user, res) {
-        //Checks whether all task ids exist
         try {
+            //Checks whether all task ids exist
             let found_ids = await task.find({_id : {$in : curr_user.pendingTasks}});
             if (found_ids.length != curr_user.pendingTasks.length) {
                 invalid_ids = curr_user.pendingTasks.filter(item => !found_ids.includes(item));
@@ -21,7 +21,6 @@ module.exports = function (router) {
             }
 
             // Checks whether all tasks are not assigned to another user
-
             let already_assigned = await task.find({_id : {$in : curr_user.pendingTasks}, 
                                                     assignedUser : {$nin : ['', curr_user._id]}});
 
@@ -31,14 +30,27 @@ module.exports = function (router) {
             }
 
             return true;
-        } catch {
-            res.status(400).send({message: 'Invalid task IDs', data : curr_user.pendingTasks});
+        } catch(err) {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(400).send({message: 'Invalid task IDs', data : curr_user.pendingTasks});
+            }
+
+            return false;
         }
     }
 
     // Updates assignedUser and assignedUserName attributes for each pending task to the user's id and name
     async function updatePendingTasks(curr_user) {
         await task.updateMany({_id : {$in : curr_user.pendingTasks}}, {assignedUser : curr_user._id, assignedUserName : curr_user.name}).exec();
+    }
+
+    // Removes completed tasks from the pendingTask array
+    async function removeCompletedTasks(curr_user) {
+        let uncompleted_tasks = await task.find({_id : {$in : curr_user.pendingTasks}, completed : false});
+        curr_user.pendingTasks = uncompleted_tasks.map(item => item._id);
+        await curr_user.save();
     }
 
     homeRoute.post(async (req, res) => {
@@ -49,13 +61,16 @@ module.exports = function (router) {
         }
 
         new_user.save().then(async data => {
-            console.log("user posting success");
             await updatePendingTasks(data);
+            await removeCompletedTasks(data);
 
             res.status(201).json({message: 'Created', data});
-        }).catch(() => {
-            console.log("user posting failed");
-            res.status(400).send({message: 'Bad Request', data: 'Invalid body'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(400).send({message: 'Bad Request', data: 'Invalid body'});
+            }
         });
     })
 
@@ -69,8 +84,12 @@ module.exports = function (router) {
             await task.updateMany({assignedUser : data._id}, {assignedUser : '', assignedUserName : 'unassigned'});
             
             res.status(200).json({message: 'OK', data});
-        }).catch(() => {
-            res.status(404).send({message: 'Not Found', data : 'Invalid ID'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(404).send({message: 'Not Found', data : 'Invalid ID'});
+            }
         })
     })
 
@@ -90,16 +109,29 @@ module.exports = function (router) {
                     await task.updateMany({_id : {$in : old_tasks}}, {assignedUser : '', assignedUserName : 'unassigned'});
 
                     await updatePendingTasks(data);
+                    await removeCompletedTasks(data);
                     
                     res.status(200).json({message: 'OK', data});
-                }).catch(() => {
-                    res.status(500).send({message: 'Server Error', data: 'Could not save document'});
+                }).catch(err => {
+                    if (err.name == "MongooseError") {
+                        res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+                    } else {
+                        res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied User'});
+                    }
                 })
-            } catch {
-                res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied User'});
+            } catch(err) {
+                if (err.name == "MongooseError") {
+                    res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+                } else {
+                    res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied User'});
+                }
             }
-        }).catch(() => {
-            res.status(404).send({message: 'Not Found', data: 'Invalid ID'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(404).send({message: 'Not Found', data: 'Invalid ID'});
+            }
         })
     })
 

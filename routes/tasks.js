@@ -32,7 +32,11 @@ module.exports = function (router) {
             }
             return true;
         } catch(err) {
-            res.status(400).send({message: 'Invalid user ID', data : curr_task.pendingTasks});
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(400).send({message: 'Invalid user ID', data : curr_task.pendingTasks});
+            }
             return false;
         }
     }
@@ -60,13 +64,14 @@ module.exports = function (router) {
         }
 
         new_task.save().then(async data => {
-            console.log("task posting success");
-
             await updateAssignedUser(data);
             res.status(201).json({message: 'Created', data});
-        }).catch(() => {
-            console.log("task posting failed");
-            res.status(400).send({message: 'Bad Request', data: 'Invalid Body'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(400).send({message: 'Bad Request', data: 'Invalid Body'});
+            }
         });
     })
 
@@ -77,13 +82,15 @@ module.exports = function (router) {
     idRoute.delete((req, res) => {
         task.findById(req.params.id).then(doc => {
             doc.remove().then(async data => {
-                console.log("task deleting success");
-
                 await resetAssignedUser(data);
                 res.status(200).json({message: 'OK', data});
             });
-        }).catch(() => {
-            res.status(404).send({message: 'Not Found', data: 'Invalid ID'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(404).send({message: 'Not Found', data: 'Invalid ID'});
+            }
         })
     })
 
@@ -97,17 +104,23 @@ module.exports = function (router) {
                 }
 
                 doc.save().then(async data => {
-                    console.log("task putting success");
-
                     await resetAssignedUser(old_doc);
                     await updateAssignedUser(data);
                     
                     res.status(200).json({message: 'OK', data});
-                }).catch(() => {
-                    res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied Task'});
+                }).catch(err => {
+                    if (err.name == "MongooseError") {
+                        res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+                    } else {
+                        res.status(400).send({message: 'Bad Request', data: 'Invalid Supplied Task'});
+                    }
                 })
-        }).catch(() => {
-            res.status(404).send({message: 'Not Found', data: 'Invalid ID'});
+        }).catch(err => {
+            if (err.name == "MongooseError") {
+                res.status(500).json({message: 'Interval Server Error', data: 'Could not connect to database'});
+            } else {
+                res.status(404).send({message: 'Not Found', data: 'Invalid ID'});
+            }
         })
     })
 
